@@ -2,11 +2,12 @@
  * Authkey WhatsApp API helpers — replacement for ./meta-api.ts.
  *
  * IMPORTANT: this file is intentionally incomplete. It implements only the
- * two operations Authkey's public docs (authkey.io/whatsapp-api-docs,
- * authkey.io/api-docs) actually document. Everything else throws
- * AuthkeyNotConfirmedError on purpose, rather than guessing a request/
- * response shape Authkey hasn't published — a wrong guess here would fail
- * silently against a real webhook and be far worse than an explicit error.
+ * operations Authkey's public docs (authkey.io/whatsapp-api-docs,
+ * authkey.io/api-docs) actually document: template sends (single + bulk),
+ * balance check. Everything else throws AuthkeyNotConfirmedError on
+ * purpose, rather than guessing a request/response shape Authkey hasn't
+ * published — a wrong guess here would fail silently against a real
+ * webhook and be far worse than an explicit error.
  *
  * See ../../../docs/authkey-integration-todo.md for exactly what's needed
  * from Authkey to finish each stubbed function, and IntenCiv's "WhatsApp
@@ -109,6 +110,102 @@ export async function sendTemplateMessage(
   return { raw: data, messageId }
 }
 
+export interface BulkRecipient {
+  /** Recipient's national number, no country code. */
+  mobile: string
+  /** Body placeholder values for this recipient, e.g. { "1": "Priya" }. */
+  bodyValues?: Record<string, string>
+  /** Only for media templates: overrides the top-level headerValues per recipient. */
+  headerValues?: { headerData: string }
+}
+
+export interface SendBulkTemplateMessageArgs extends AuthkeyCredentials {
+  /** e.g. "91" for India. Applies to every recipient in this call. */
+  countryCode: string
+  /** Authkey's approved-template id ("wid" in their docs). */
+  templateId: string
+  /** 'text' for a plain/variable template, 'media' for an image/doc/video header. */
+  type: 'text' | 'media'
+  /** Up to 200 recipients per call (Authkey's documented cap for this endpoint). */
+  recipients: BulkRecipient[]
+  /** Dynamic value for a template's button (e.g. a per-recipient tracking param). */
+  buttonParamValue?: string
+  /** Dynamic value for a "copy offer code" button. */
+  copyCodeValue?: string
+  /** Limited-Time-Offer expiry, Unix time in milliseconds (only with copyCodeValue). */
+  expirationTimeMs?: string
+}
+
+/**
+ * Send one template to up to 200 recipients in a single call, with each
+ * recipient getting their own bodyValues/headerValues.
+ * Documented at https://authkey.io/whatsapp-api-docs
+ * (POST requestjson_v2.0.php, "version": "2.0").
+ *
+ * Maps naturally onto this CRM's existing Broadcasts feature
+ * (broadcasts / broadcast_recipients tables, migration 037/038) — the
+ * broadcast sender can batch its recipient list into calls of <=200 here
+ * instead of one Authkey request per contact.
+ */
+export async function sendBulkTemplateMessage(
+  args: SendBulkTemplateMessageArgs
+): Promise<AuthkeySendResult> {
+  const {
+    apiKey,
+    countryCode,
+    templateId,
+    type,
+    recipients,
+    buttonParamValue,
+    copyCodeValue,
+    expirationTimeMs,
+  } = args
+
+  if (recipients.length === 0) {
+    throw new Error('sendBulkTemplateMessage: recipients must not be empty')
+  }
+  if (recipients.length > 200) {
+    throw new Error(
+      `sendBulkTemplateMessage: Authkey's v2.0 endpoint caps a single call at 200 ` +
+        `recipients; got ${recipients.length}. Split into batches before calling.`
+    )
+  }
+
+  const body: Record<string, unknown> = {
+    version: '2.0',
+    country_code: countryCode,
+    wid: templateId,
+    type,
+    data: recipients.map((r) => {
+      const entry: Record<string, unknown> = { mobile: r.mobile }
+      if (r.bodyValues) entry.bodyValues = r.bodyValues
+      if (r.headerValues) entry.headerValues = r.headerValues
+      return entry
+    }),
+  }
+  if (buttonParamValue) body.button_param_value = buttonParamValue
+  if (copyCodeValue) body.copy_code_value = copyCodeValue
+  if (expirationTimeMs) body.expiration_time_ms = expirationTimeMs
+
+  const response = await fetch(`${AUTHKEY_BASE}/requestjson_v2.0.php`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Basic ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+  })
+
+  const data = await response.json().catch(() => null)
+  if (!response.ok) {
+    throw new Error(`Authkey bulk API error: ${response.status} ${JSON.stringify(data)}`)
+  }
+  // Response shape for the v2.0 bulk endpoint is undocumented (same caveat
+  // as sendTemplateMessage) — log and tighten once seen against a real
+  // account.
+  return { raw: data }
+}
+
 /**
  * Account balance check — documented at authkey.io/api-docs
  * (GET getbalance.php). Genuinely useful as a first smoke test: if this
@@ -139,9 +236,10 @@ export interface SendFreeformTextArgs extends AuthkeyCredentials {
  * A live agent replying to an open conversation needs to send plain text,
  * not a pre-approved template — this is what Meta's Cloud API calls a
  * "session message" (free inside the 24h customer service window).
- * Authkey's docs show no such endpoint; every example requires a `wid`.
- * Confirm with Authkey whether this exists before Reception/Sales can
- * reply freely in the CRM inbox.
+ * Authkey's docs show no such endpoint; every example — including the
+ * bulk v2.0 endpoint above — requires a `wid`. Confirm with Authkey
+ * whether this exists before Reception/Sales can reply freely in the
+ * CRM inbox.
  */
 export async function sendFreeformTextMessage(
   _args: SendFreeformTextArgs

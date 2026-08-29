@@ -6,10 +6,11 @@ keep 7399000299 on Authkey exactly as it is today (SMS, OTP, DLT, existing
 WhatsApp campaigns) while adding a self-built multi-agent CRM on top.
 
 Authkey's *public* docs (authkey.io/whatsapp-api-docs, authkey.io/api-docs)
-only cover template-based sending and a balance check. Everything else below
-is undocumented publicly and needs a direct answer from Authkey — get these
-from the account dashboard, support chat, or the account manager, in this
-order, before wiring the rest of the app:
+cover template-based sending (single + bulk, up to 200 recipients per call),
+a media/document header variant, and a balance check. Everything else below
+is still undocumented publicly and needs a direct answer from Authkey — get
+these from the account dashboard, support chat, or the account manager, in
+this order, before wiring the rest of the app:
 
 ## 1. Inbound webhook payload (blocks: receiving any message at all)
 Send yourself a test WhatsApp message on 7399000299 with the webhook pointed
@@ -31,16 +32,22 @@ in `authkey-api.ts` throws until this is answered — that's deliberate, not a
 bug to silently work around.
 
 ## 3. Free-form / session-reply send (blocks: agents replying live)
-Every example in Authkey's docs sends through a `wid` (approved template).
-A live agent answering an open chat needs to send plain text, not always a
-template — confirm whether Authkey has this, or whether every reply,
-including live agent replies, must go through a template.
+Every example in Authkey's docs — including the bulk v2.0 endpoint added
+2026-08-29 — sends through a `wid` (approved template), even the "no
+variable" case. A live agent answering an open chat needs to send plain
+text, not always a template — confirm whether Authkey has this, or whether
+every reply, including live agent replies, must go through a template.
 
-## 4. `requestjson.php` response shape (blocks: knowing if a send worked)
-Send one real template message and capture the actual response body —
-success and a deliberately-broken failure case (bad `wid`, bad number).
-`sendTemplateMessage` in `authkey-api.ts` currently guesses at a `MessageId`
-field; correct it once we've seen a real response.
+## 4. `requestjson.php` / `requestjson_v2.0.php` response shape (blocks: knowing if a send worked)
+Send one real template message (single and bulk) and capture the actual
+response body — success and a deliberately-broken failure case (bad `wid`,
+bad number). `sendTemplateMessage` and `sendBulkTemplateMessage` in
+`authkey-api.ts` currently just return the raw parsed JSON and guess at a
+`MessageId` field on the single-send path; correct both once we've seen a
+real response.
+**Note:** the *request* shape (bodyValues, headerValues, country_code,
+mobile, wid, type) is now confirmed from Authkey's docs and matches what's
+implemented — only the response shape is still unverified.
 
 ## 5. Media download for inbound attachments (blocks: viewing what customers send)
 When a customer sends a photo or PDF, what does Authkey's webhook give us to
@@ -51,6 +58,37 @@ specifically matters for anything a *customer* sends in.)
 ## 6. Confirm the send/webhook API works without the paid Agent Dashboard
 This is the whole premise of building a CRM instead of paying per agent —
 get this in writing before more engineering time goes in.
+
+---
+
+## Confirmed 2026-08-29 (implemented)
+
+Authkey's docs (pasted into this project's chat) confirmed and added:
+
+- **Single template send** (`sendTemplateMessage`, POST `requestjson.php`) —
+  request shape confirmed correct; already implemented.
+- **Bulk template send** (`sendBulkTemplateMessage`, POST
+  `requestjson_v2.0.php`, `"version": "2.0"`) — up to 200 recipients per
+  call, each with their own `bodyValues`/`headerValues`. Maps directly onto
+  this CRM's existing Broadcasts feature (`broadcasts` /
+  `broadcast_recipients` tables) — the broadcast sender can batch its
+  recipient list into calls of ≤200 instead of one Authkey request per
+  contact. Also supports `button_param_value`, `copy_code_value`, and
+  `expiration_time_ms` (LTO offers) — not wired up in the CRM UI yet since
+  they're offer/coupon-template features, not immediately relevant to
+  IntenCiv's report/appointment/reminder use cases, but the function accepts
+  them if a future template needs them.
+- **GET-based media send** (`request.php`, `template_type=media`) —
+  documented but not implemented as a separate function; the POST JSON path
+  (`sendTemplateMessage` with `headerValues`) already covers the same case
+  and is more consistent with the rest of this file, so it wasn't
+  duplicated.
+- **Balance check** (`getBalance`, GET `getbalance.php`) — unchanged, was
+  already implemented and confirmed correct.
+
+None of this resolves items 1, 2, 3, 5, or 6 above — those are all about
+**inbound** messaging and live agent replies, which Authkey's public docs
+still don't cover at all.
 
 ---
 
