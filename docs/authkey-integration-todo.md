@@ -140,3 +140,40 @@ paste the URL above, method POST. Then:
 
 This is intentionally throwaway code — do not build message-processing
 logic on top of it; delete it once the real handler exists.
+
+## Conclusive finding 2026-08-29: inbound webhook does not fire
+
+Tested twice with real inbound WhatsApp messages to the connected number
+(after clearing an unrelated chatbot/fallback loop that was intercepting
+messages on Authkey's side -- see incident note below):
+
+- Webhook id 1026 (channel `wp`, our diagnostic route, method POST) was
+  confirmed active in the dashboard both times.
+- Railway deploy logs: zero HTTP requests reached the route for either
+  test. No `[authkey-webhook]` log line at all.
+- Authkey's own "Webhook Report" page: "No Report Found" both times --
+  i.e. Authkey never even attempted a delivery, this isn't a network/auth
+  failure on our end.
+
+Conclusion: on this account/plan, Authkey's webhook mechanism does not
+dispatch inbound WhatsApp message events, despite the UI allowing you to
+configure one for the "wp" channel. Support has been asked directly
+(2026-08-29) whether inbound webhook delivery is supported at all, and
+whether a pollable Chat/Messages API exists as an alternative. Do not
+re-test this same setup again without new guidance from Authkey support --
+two independent real-message tests already confirm it's not a fluke.
+
+### Incident note: chatbot/fallback loop
+
+Separately, an old chatbot flow was found still bound to the WhatsApp
+number (visible as "Answered"/"Repeated" chat stats and a live entry in
+Chat Management for a real inbound message from "Ashok Kumar"). Deleting
+the bot without first deactivating it triggered a run of repeated
+outbound messages -- stopped via Authkey's dashboard (Chatbot/Fallback/
+Chat Management), not anything on our end; Railway logs confirmed zero
+involvement from our webhook or app throughout. If this recurs: check
+Chatbot (any flow still Active), Fallback (a separate default-reply
+config), and Chat Management (per-conversation "end/stop" action) in that
+order, and escalate to Authkey support immediately if not resolved within
+a few minutes, since it burns balance and risks the number's WhatsApp
+quality rating.
