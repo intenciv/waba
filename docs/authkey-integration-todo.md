@@ -109,3 +109,34 @@ Meta's app directly for template approval. If Authkey handles template
 submission on its own dashboard (likely, as a BSP), that whole flow may not
 belong in the CRM at all — templates get created in Authkey's console and
 just *referenced by id* (`wid`) from here.
+
+## Diagnostic webhook deployed 2026-08-29
+
+Rather than keep inferring the inbound payload shape from the Authkey
+dashboard's webhook-config screen, we deployed a logging-only route that
+captures whatever Authkey actually sends:
+
+- Route: `src/app/api/whatsapp/authkey-webhook/route.ts` — logs method, URL,
+  query params, headers and raw body to stdout (visible in Railway deploy
+  logs) for both GET and POST, then responds. Rejects with 401 if the
+  `token` query param doesn't match `AUTHKEY_WEBHOOK_TOKEN`.
+- Railway env var `AUTHKEY_WEBHOOK_TOKEN` set (not committed to the repo).
+- Full URL to paste into Authkey's Webhook Setup page:
+  `https://web-production-49512.up.railway.app/api/whatsapp/authkey-webhook?token=376a9114c32eb5addfd48babf0c595463d77ae9060d98b25`
+
+Next: create a new webhook entry in Authkey's dashboard with Select Channel
+= "Whatsapp" (not "Whastapp Conversation" — unconfirmed which of the two is
+the standard inbound-message channel; try "Whatsapp" first, since it's the
+plain/unqualified option and closest to the existing SMS entry's pattern),
+paste the URL above, method POST. Then:
+1. Send an inbound WhatsApp message to the Authkey-connected business
+   number from a personal phone.
+2. Separately, send one outbound template message through the CRM (or
+   Authkey's own console) to see the delivery-status callback shape.
+3. Read Railway deploy logs (`get-logs`, filter for `[authkey-webhook]`) to
+   see the real payloads for both.
+4. Replace this diagnostic route with a real handler once the shape is
+   known, and answer items 1/2/3/5/6 above from what was observed.
+
+This is intentionally throwaway code — do not build message-processing
+logic on top of it; delete it once the real handler exists.
