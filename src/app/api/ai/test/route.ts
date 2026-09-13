@@ -71,6 +71,10 @@ export async function POST(request: Request) {
         isActive: true,
         autoReplyEnabled: false,
         autoReplyMaxPerConversation: 3,
+        autoReplyHoursEnabled: false,
+        autoReplyHoursStart: 20,
+        autoReplyHoursEnd: 8,
+        autoReplyTimezone: 'Asia/Kolkata',
         handoffAgentId: null,
         embeddingsApiKey: null,
       })
