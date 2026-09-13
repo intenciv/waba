@@ -12,10 +12,14 @@ interface AiConfigRow {
   auto_reply_max_per_conversation: number
   handoff_agent_id: string | null
   embeddings_api_key: string | null
+  auto_reply_hours_enabled: boolean
+  auto_reply_hours_start: number
+  auto_reply_hours_end: number
+  auto_reply_timezone: string
 }
 
 const CONFIG_COLUMNS =
-  'provider, model, api_key, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, embeddings_api_key'
+  'provider, model, api_key, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, embeddings_api_key, auto_reply_hours_enabled, auto_reply_hours_start, auto_reply_hours_end, auto_reply_timezone'
 
 /**
  * Load and decrypt the account's AI config for *use* (draft or
@@ -79,6 +83,12 @@ export async function loadAiConfig(
     autoReplyMaxPerConversation: row.auto_reply_max_per_conversation,
     handoffAgentId: row.handoff_agent_id,
     embeddingsApiKey,
+    // Defensive fallback to the same defaults as the migration/column
+    // DEFAULTs, in case this is ever read against a stale schema cache.
+    autoReplyHoursEnabled: row.auto_reply_hours_enabled ?? false,
+    autoReplyHoursStart: row.auto_reply_hours_start ?? 20,
+    autoReplyHoursEnd: row.auto_reply_hours_end ?? 8,
+    autoReplyTimezone: row.auto_reply_timezone ?? 'Asia/Kolkata',
   }
 }
 
