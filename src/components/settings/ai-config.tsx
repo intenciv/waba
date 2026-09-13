@@ -48,6 +48,14 @@ const KEY_PLACEHOLDER: Record<AiProvider, string> = {
   anthropic: 'sk-ant-...',
 };
 
+// 12-hour labels for the hour-of-day pickers below (0 = 12:00 AM, 20 =
+// 8:00 PM, ...) — the stored value stays a plain 0-23 integer.
+const HOURS = Array.from({ length: 24 }, (_, h) => {
+  const period = h < 12 ? 'AM' : 'PM';
+  const display = h % 12 === 0 ? 12 : h % 12;
+  return { value: h, label: `${display}:00 ${period}` };
+});
+
 export function AiConfig() {
   const { accountId, accountRole, profileLoading } = useAuth();
   const canEdit = accountRole ? canEditSettings(accountRole) : false;
@@ -72,6 +80,10 @@ export function AiConfig() {
   const [isActive, setIsActive] = useState(false);
   const [autoReplyEnabled, setAutoReplyEnabled] = useState(false);
   const [maxPerConversation, setMaxPerConversation] = useState(3);
+  const [hoursEnabled, setHoursEnabled] = useState(false);
+  const [hoursStart, setHoursStart] = useState(20);
+  const [hoursEnd, setHoursEnd] = useState(8);
+  const [timezone, setTimezone] = useState('Asia/Kolkata');
   // Empty string = leave unassigned (shared queue).
   const [handoffAgentId, setHandoffAgentId] = useState('');
   const [members, setMembers] = useState<AccountMember[]>([]);
@@ -99,6 +111,10 @@ export function AiConfig() {
         setIsActive(data.is_active);
         setAutoReplyEnabled(data.auto_reply_enabled);
         setMaxPerConversation(data.auto_reply_max_per_conversation ?? 3);
+        setHoursEnabled(data.auto_reply_hours_enabled ?? false);
+        setHoursStart(data.auto_reply_hours_start ?? 20);
+        setHoursEnd(data.auto_reply_hours_end ?? 8);
+        setTimezone(data.auto_reply_timezone ?? 'Asia/Kolkata');
         setHandoffAgentId(data.handoff_agent_id ?? '');
         setHasStoredKey(Boolean(data.has_key));
         setApiKey(data.has_key ? MASKED_KEY : '');
@@ -150,6 +166,10 @@ export function AiConfig() {
     is_active: isActive,
     auto_reply_enabled: autoReplyEnabled,
     auto_reply_max_per_conversation: maxPerConversation,
+    auto_reply_hours_enabled: hoursEnabled,
+    auto_reply_hours_start: hoursStart,
+    auto_reply_hours_end: hoursEnd,
+    auto_reply_timezone: timezone.trim() || 'Asia/Kolkata',
     handoff_agent_id: handoffAgentId || null,
   });
 
@@ -218,6 +238,10 @@ export function AiConfig() {
         setIsActive(false);
         setAutoReplyEnabled(false);
         setSystemPrompt('');
+        setHoursEnabled(false);
+        setHoursStart(20);
+        setHoursEnd(8);
+        setTimezone('Asia/Kolkata');
         setHandoffAgentId('');
       } else {
         const data = await res.json();
@@ -454,6 +478,80 @@ export function AiConfig() {
                 disabled={disabled || !autoReplyEnabled}
                 className="w-20"
               />
+            </div>
+
+            <div className="space-y-3 rounded-md border border-border p-3">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium text-foreground">
+                    {t('restrictHours')}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {t('restrictHoursDesc')}
+                  </p>
+                </div>
+                <Switch
+                  checked={hoursEnabled}
+                  onCheckedChange={setHoursEnabled}
+                  disabled={disabled || !autoReplyEnabled}
+                />
+              </div>
+
+              {hoursEnabled && (
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ai-hours-start">{t('hoursFrom')}</Label>
+                    <Select
+                      value={String(hoursStart)}
+                      onValueChange={(v) => setHoursStart(Number(v))}
+                      disabled={disabled || !autoReplyEnabled}
+                    >
+                      <SelectTrigger id="ai-hours-start">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {HOURS.map((h) => (
+                          <SelectItem key={h.value} value={String(h.value)}>
+                            {h.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ai-hours-end">{t('hoursTo')}</Label>
+                    <Select
+                      value={String(hoursEnd)}
+                      onValueChange={(v) => setHoursEnd(Number(v))}
+                      disabled={disabled || !autoReplyEnabled}
+                    >
+                      <SelectTrigger id="ai-hours-end">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {HOURS.map((h) => (
+                          <SelectItem key={h.value} value={String(h.value)}>
+                            {h.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ai-timezone">{t('timezone')}</Label>
+                    <Input
+                      id="ai-timezone"
+                      value={timezone}
+                      onChange={(e) => setTimezone(e.target.value)}
+                      placeholder="Asia/Kolkata"
+                      disabled={disabled || !autoReplyEnabled}
+                    />
+                  </div>
+                  <p className="sm:col-span-3 text-xs text-muted-foreground">
+                    {t('hoursHint')}
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">
