@@ -7,6 +7,7 @@ import { buildSystemPrompt } from './defaults'
 import { buildHandoffSummary } from './handoff'
 import { logAiUsage } from './usage'
 import { latestUserMessage } from './query'
+import { isWithinAutoReplyHours } from './hours'
 import { engineSendText } from '@/lib/flows/meta-send'
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit'
 
@@ -30,6 +31,9 @@ interface DispatchArgs {
  *
  * Eligibility gates (any → silent no-op):
  *   - AI off / auto-reply disabled for the account
+ *   - outside the account's configured auto-reply hours, when that
+ *     restriction is turned on (e.g. IntenCiv: bot only 20:00–08:00 IST,
+ *     human agents own the inbox the rest of the day)
  *   - a human agent is assigned (they own the thread)
  *   - auto-reply was disabled for this conversation (prior handoff)
  *   - the per-conversation reply cap is reached
@@ -49,6 +53,13 @@ export async function dispatchInboundToAiReply(
 
     const config = await loadAiConfig(db, accountId)
     if (!config || !config.autoReplyEnabled) return
+
+    // Time-of-day restriction (off by default): when the account has
+    // scoped the bot to certain hours, stand down outside that window
+    // and leave the message for a human — same as any other eligibility
+    // gate here, and re-checked on every inbound rather than cached, so
+    // a message that arrives right at the boundary is judged correctly.
+    if (!isWithinAutoReplyHours(config)) return
 
     // Deterministic, user-configured responders win over the LLM — the
     // caller already excludes messages a Flow consumed. Message-level
