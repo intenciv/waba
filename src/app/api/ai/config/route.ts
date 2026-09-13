@@ -30,7 +30,7 @@ export async function GET() {
       // `api_key` is selected only to derive `has_key` — it is stripped
       // out below and never returned to the client.
       .select(
-        'provider, model, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, api_key, embeddings_api_key',
+        'provider, model, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, api_key, embeddings_api_key, auto_reply_hours_enabled, auto_reply_hours_start, auto_reply_hours_end, auto_reply_timezone',
       )
       .eq('account_id', accountId)
       .maybeSingle()
@@ -94,6 +94,30 @@ export async function POST(request: Request) {
     let maxPer = Number(body.auto_reply_max_per_conversation)
     if (!Number.isFinite(maxPer)) maxPer = 3
     maxPer = Math.min(20, Math.max(1, Math.floor(maxPer)))
+
+    // Optional time-of-day restriction on the auto-reply bot (e.g. only
+    // reply 20:00–08:00, leave daytime inbound for human agents). Every
+    // field defaults to the same values as the DB column defaults so an
+    // account that has never touched this section gets a sane row.
+    const autoReplyHoursEnabled = body.auto_reply_hours_enabled === true
+    const clampHour = (v: unknown, fallback: number) => {
+      const n = Number(v)
+      return Number.isFinite(n) ? Math.min(23, Math.max(0, Math.floor(n))) : fallback
+    }
+    const autoReplyHoursStart = clampHour(body.auto_reply_hours_start, 20)
+    const autoReplyHoursEnd = clampHour(body.auto_reply_hours_end, 8)
+    const rawTimezone =
+      typeof body.auto_reply_timezone === 'string' && body.auto_reply_timezone.trim()
+        ? body.auto_reply_timezone.trim()
+        : 'Asia/Kolkata'
+    try {
+      // Intl.DateTimeFormat throws RangeError for a zone it doesn't
+      // recognize — the cheapest way to validate an IANA zone name
+      // without shipping a zone database of our own.
+      new Intl.DateTimeFormat('en-US', { timeZone: rawTimezone })
+    } catch {
+      return bad(`Unrecognized timezone: ${rawTimezone}`)
+    }
 
     // Handoff routing target for auto-reply. A non-empty string must be a
     // member of this account (else the conversation would be assigned to a
@@ -167,6 +191,10 @@ export async function POST(request: Request) {
           autoReplyMaxPerConversation: maxPer,
           handoffAgentId: null,
           embeddingsApiKey: null,
+          autoReplyHoursEnabled,
+          autoReplyHoursStart,
+          autoReplyHoursEnd,
+          autoReplyTimezone: rawTimezone,
         })
       } catch (err) {
         if (err instanceof AiError) {
@@ -205,6 +233,10 @@ export async function POST(request: Request) {
       is_active: isActive,
       auto_reply_enabled: autoReplyEnabled,
       auto_reply_max_per_conversation: maxPer,
+      auto_reply_hours_enabled: autoReplyHoursEnabled,
+      auto_reply_hours_start: autoReplyHoursStart,
+      auto_reply_hours_end: autoReplyHoursEnd,
+      auto_reply_timezone: rawTimezone,
     }
     // Only touch the handoff target when the form actually sent the field,
     // so a partial save (e.g. flipping a toggle) doesn't wipe it.
