@@ -77,6 +77,10 @@ function aiConfig(overrides: Partial<AiConfig> = {}): AiConfig {
     autoReplyMaxPerConversation: 3,
     handoffAgentId: null,
     embeddingsApiKey: null,
+    autoReplyHoursEnabled: false,
+    autoReplyHoursStart: 20,
+    autoReplyHoursEnd: 8,
+    autoReplyTimezone: 'UTC',
     ...overrides,
   }
 }
@@ -183,6 +187,41 @@ describe('dispatchInboundToAiReply — eligibility gates', () => {
     await dispatchInboundToAiReply(ARGS)
     expect(h.generateReply).not.toHaveBeenCalled()
     expect(h.engineSendText).not.toHaveBeenCalled()
+  })
+
+  it('skips when outside the configured auto-reply hours', async () => {
+    // 12:00 UTC, restricted to a 20-8 UTC overnight window — noon falls
+    // outside it, so the bot should stand down for a human to answer.
+    h.loadAiConfig.mockResolvedValue(
+      aiConfig({
+        autoReplyHoursEnabled: true,
+        autoReplyHoursStart: 20,
+        autoReplyHoursEnd: 8,
+        autoReplyTimezone: 'UTC',
+      }),
+    )
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(Date.UTC(2026, 0, 15, 12, 0, 0)))
+    await dispatchInboundToAiReply(ARGS)
+    expect(h.generateReply).not.toHaveBeenCalled()
+    expect(h.engineSendText).not.toHaveBeenCalled()
+    vi.useRealTimers()
+  })
+
+  it('replies when inside the configured auto-reply hours', async () => {
+    h.loadAiConfig.mockResolvedValue(
+      aiConfig({
+        autoReplyHoursEnabled: true,
+        autoReplyHoursStart: 20,
+        autoReplyHoursEnd: 8,
+        autoReplyTimezone: 'UTC',
+      }),
+    )
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(Date.UTC(2026, 0, 15, 23, 0, 0)))
+    await dispatchInboundToAiReply(ARGS)
+    expect(h.engineSendText).toHaveBeenCalled()
+    vi.useRealTimers()
   })
 })
 
