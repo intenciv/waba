@@ -29,6 +29,21 @@ export interface AiConfig {
    *  knowledge base is embedded and semantic retrieval turns on; when
    *  null, retrieval falls back to lexical full-text search. */
   embeddingsApiKey: string | null
+  /** When true, the auto-reply bot only answers inbound messages inside
+   *  the [autoReplyHoursStart, autoReplyHoursEnd) window below — outside
+   *  it, the eligibility check in `dispatchInboundToAiReply` silently
+   *  stands down and the message waits in the inbox for a human agent,
+   *  same as if auto-reply were off. False (default) = no restriction. */
+  autoReplyHoursEnabled: boolean
+  /** Local hour-of-day (0–23, in `autoReplyTimezone`) the window opens. */
+  autoReplyHoursStart: number
+  /** Local hour-of-day (0–23, in `autoReplyTimezone`) the window closes.
+   *  `autoReplyHoursStart > autoReplyHoursEnd` wraps past midnight (e.g.
+   *  20 → 8 covers 20:00 through 07:59). */
+  autoReplyHoursEnd: number
+  /** IANA zone the two hours above are interpreted in (e.g.
+   *  "Asia/Kolkata"). Defaults to Asia/Kolkata for a new config. */
+  autoReplyTimezone: string
 }
 
 /** A single conversation turn in the shape both providers accept. */
