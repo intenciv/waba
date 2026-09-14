@@ -1615,7 +1615,10 @@
       "useMode": "Use {mode} mode",
       "active": "Active",
       "accentColor": "Accent color",
-      "useTheme": "Use {name} theme"
+      "useTheme": "Use {name} theme",
+      "notifications": "Notifications",
+      "soundOnNewMessage": "Play a sound for new messages",
+      "soundOnNewMessageDesc": "Chimes when a customer message arrives, even if you're not looking at that conversation. Saved to this device."
     },
     "security": {
       "title": "Login & security",
