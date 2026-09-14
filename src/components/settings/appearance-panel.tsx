@@ -1,12 +1,14 @@
 "use client";
 
-import { Check, Moon, Palette, SunMoon, Sun } from "lucide-react";
+import { Bell, Check, Moon, Palette, SunMoon, Sun } from "lucide-react";
 
 import { useTheme } from "@/hooks/use-theme";
+import { useNotificationSound } from "@/hooks/use-notification-sound";
 import { MODES, THEMES, type Mode, type ThemeId } from "@/lib/themes";
 import { cn } from "@/lib/utils";
 import { useTranslations } from "next-intl";
 import { SettingsPanelHead } from "./settings-panel-head";
+import { Switch } from "@/components/ui/switch";
 
 /**
  * Appearance panel — light/dark mode + accent-color picker.
@@ -22,6 +24,8 @@ import { SettingsPanelHead } from "./settings-panel-head";
  */
 export function AppearancePanel() {
   const { theme, setTheme, mode, setMode } = useTheme();
+  const { enabled: soundEnabled, setEnabled: setSoundEnabled } =
+    useNotificationSound();
   const t = useTranslations("Settings.appearance");
 
   return (
@@ -71,6 +75,29 @@ export function AppearancePanel() {
               onPick={() => setTheme(tObj.id)}
             />
           ))}
+        </div>
+      </div>
+
+      <div className="mt-8 space-y-4">
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          <Bell className="size-4 text-muted-foreground" />
+          {t("notifications")}
+        </h3>
+
+        <div className="flex max-w-md items-center justify-between gap-4 rounded-lg border border-border bg-card p-4">
+          <div>
+            <p className="text-sm font-medium text-foreground">
+              {t("soundOnNewMessage")}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {t("soundOnNewMessageDesc")}
+            </p>
+          </div>
+          <Switch
+            checked={soundEnabled}
+            onCheckedChange={setSoundEnabled}
+            aria-label={t("soundOnNewMessage")}
+          />
         </div>
       </div>
     </section>

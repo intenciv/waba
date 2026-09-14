@@ -10,6 +10,8 @@ import {
 } from "@/lib/inbox/conversations";
 import type { Conversation, Message, Contact, ConversationStatus } from "@/types";
 import { useRealtime } from "@/hooks/use-realtime";
+import { useNotificationSound } from "@/hooks/use-notification-sound";
+import { shouldPlayNotificationSound } from "@/lib/notifications/sound-preference";
 import { ConversationList } from "@/components/inbox/conversation-list";
 import { MessageThread } from "@/components/inbox/message-thread";
 import { ContactSidebar } from "@/components/inbox/contact-sidebar";
@@ -59,6 +61,8 @@ function InboxPageInner() {
    * once on conversationId-change as usual.
    */
   const [resyncToken, setResyncToken] = useState(0);
+
+  const { play: playNotificationSound } = useNotificationSound();
 
   /**
    * Whether the desktop contact sidebar (tags / deals / notes) is shown.
@@ -218,6 +222,14 @@ function InboxPageInner() {
       const newMsg = event.new;
 
       if (event.eventType === "INSERT") {
+        // Chime on genuine inbound customer messages only — never for
+        // the agent's own sends or bot/automation replies, which also
+        // INSERT on this same realtime channel. Fires regardless of
+        // which conversation is open so it's audible from the list too.
+        if (shouldPlayNotificationSound(newMsg)) {
+          playNotificationSound();
+        }
+
         // Add to messages if it belongs to active conversation
         if (
           activeConversation &&
@@ -272,7 +284,7 @@ function InboxPageInner() {
         );
       }
     },
-    [activeConversation, hydrateConversation]
+    [activeConversation, hydrateConversation, playNotificationSound]
   );
 
   // Handle realtime conversation events
